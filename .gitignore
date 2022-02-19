@@ -1,0 +1,5 @@
+*.pyc
+*.ipynb
+docs/_build
+fishing_exam_alert/google_creds/*
+.env

@@ -1,7 +1,16 @@
 version: '3'
 
 services:
-  app:
+  notifier:
+    restart: "unless-stopped"
+    build: .
+    image: fishing-exam-alert-notifier
+    env_file:
+      - .env
+  email_confirmation:
+    restart: "unless-stopped"
+    image: fishing-exam-alert-notifier
     build: .
     env_file:
       - .env
+    command: python -u fishing_exam_alert/confirmation.py

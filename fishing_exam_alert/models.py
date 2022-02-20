@@ -195,7 +195,7 @@ class GSheetTable:
 
         # add filters
         notify_row["filters"] = dict()
-        notify_row["filters"]["Teilnehmer"] = "Belegt"
+        notify_row["filters"]["Teilnehmer"] = "Frei"
         locations = row["Nur bestimmte Regierungsbezirke? (Standard: Alle)"]
         if locations:
             notify_row["filters"]["Regierungsbezirk"] = locations.split(", ")

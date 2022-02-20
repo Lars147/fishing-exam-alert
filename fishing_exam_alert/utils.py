@@ -1,17 +1,112 @@
 import smtplib
 from email.message import EmailMessage
+from typing import List
 
 import pandas as pd
 
 from fishing_exam_alert.settings import setting
 
 
-def notify(email: str, exams: list):
+def notify(email_to: str, exams: List[dict]):
     """Notify the email address with information"""
     # init df for exam data
     df = pd.DataFrame.from_records(exams)
 
-    send_mail(email, f"Es gibt {len(exams)} freie Termine!", df.to_string(), df.to_html())
+    # construct the message body
+    email_to_username = email_to.split("@")[0]  # removes for example @gmail.de
+    pre_message_plain = f"""
+    Hi {email_to_username},\n
+    es gibt {len(exams)} neue Prüfungen, die deinen Filterkriterien entsprechen:\n\n
+    """
+    post_message_plain = f"""\n
+    Du kannst dich hier für die Fischereiprüfung anmelden: {setting.EXAM_SCRAP_URL}.
+    \n\n
+    Du bekommst diese Mail, weil du dich für den Fischereiprüfungs Alarm angemeldet hast.\n
+    Wenn du keine Benachrichtigungen mehr erhalten möchtest 
+    oder du fälschlicherweise diese Mail erhalten hast, 
+    kannst du dich hier abmelden: {setting.UNSUBSCRIBE_URL}.
+    """
+    plain_message = pre_message_plain + df.to_string() + post_message_plain
+
+    pre_message_html = f"""
+    Hi {email_to_username},<br/>
+    es gibt {len(exams)} neue Prüfungen, die deinen Filterkriterien entsprechen:<br/><br/>
+    """
+    post_message_html = f"""<br/>
+    Du kannst dich hier für die Fischereiprüfung anmelden: <a href="{setting.EXAM_SCRAP_URL}">{setting.EXAM_SCRAP_URL}</a>.
+    <br/><br/>
+    Du bekommst diese Mail, weil du dich für den Fischereiprüfungs Alarm angemeldet hast.
+    <br/>
+    Wenn du keine Benachrichtigungen mehr erhalten möchtest 
+    oder du fälschlicherweise diese Mail erhalten hast, 
+    kannst du dich <a href="{setting.UNSUBSCRIBE_URL}">hier</a> abmelden.
+    """
+    html_message = pre_message_html + df.to_html() + post_message_html
+
+    send_mail(email_to, f"Es gibt {len(exams)} freie Termine!", plain_message, html_message)
+
+
+def send_unsubscribe_mail(email_to: str):
+    email_to_username = email_to.split("@")[0]  # removes for example @gmail.de
+    message = f"""
+    Hi {email_to_username},\n
+    du wurdest erfolgreich abgemeldet! Du erhälst zukünftig keine Benachrichtigungen mehr.\n    
+    \n\n
+    Wenn du fälschlicherweise abgemeldet wurdest oder dich wieder anmelden möchtest, 
+    kannst du dich hier wieder anmelden: {setting.SUBSCRIBE_URL}.
+    """
+    html_message = f"""
+    Hi {email_to_username},<br/>
+    du wurdest erfolgreich abgemeldet! Du erhälst zukünftig keine Benachrichtigungen mehr.<br/>    
+    <br/><br/>
+    Wenn du fälschlicherweise abgemeldet wurdest oder dich wieder anmelden möchtest, 
+    kannst du dich <a href="{setting.SUBSCRIBE_URL}">hier</a> wieder anmelden.
+    """
+    send_mail(email_to, "Abmeldung - Fischereiprüfungs Alarm!", message, html_message)
+
+
+def send_confirmation_mail(email_to: str, filters: dict):
+    """
+    Send a confirmation mail to the user.
+
+    Sends a mail with the filters that were used to get the exams, e.g.
+    ```
+    {
+        "Teilnehmer": "Frei",
+        "Regierungsbezirk": ["Oberbayern"]
+    }
+    ```
+    """
+
+    filters_text_plain = "\n".join(f"\t- {key}: {value}" for key, value in filters.items())
+    email_to_username = email_to.split("@")[0]  # removes for example @gmail.de
+    message = f"""
+    Hi {email_to_username},\n
+    du erhälst diese Mail, weil du dich für den Fischereiprüfungs Alarm angemeldet hast.\n
+    Ab sofort wirst du über alle Termine informiert, wenn die folgenden Filter zutreffen:\n
+    
+    {filters_text_plain}
+    
+    \n\n
+    Wenn du keine Benachrichtigungen mehr erhalten möchtest 
+    oder du fälschlicherweise diese Mail erhalten hast, 
+    kannst du dich hier abmelden: {setting.UNSUBSCRIBE_URL}.
+    """
+
+    filters_text_html = [f"<ul>{key}: {value}</ul>" for key, value in filters.items()]
+    html_message = f"""
+    Hi {email_to_username},<br/>
+    du erhälst diese Mail, weil du dich für den Fischereiprüfungs Alarm angemeldet hast.<br/>
+    Ab sofort wirst du über alle Termine informiert, wenn die folgenden Filter zutreffen:<br/>
+    
+    {filters_text_html}
+    
+    <br/><br/>
+    Wenn du keine Benachrichtigungen mehr erhalten möchtest 
+    oder du fälschlicherweise diese Mail erhalten hast, 
+    kannst du dich <a href="{setting.UNSUBSCRIBE_URL}">hier</a> abmelden.
+    """
+    send_mail(email_to, "Anmeldung - Fischereiprüfungs Alarm!", message, html_message)
 
 
 def send_mail(email_to: str, subject: str, message: str, html_message: str = ""):
@@ -24,8 +119,7 @@ def send_mail(email_to: str, subject: str, message: str, html_message: str = "")
     msg["From"] = setting.NOTIFY_MAIL_FROM
     msg["To"] = email_to
 
-    s = smtplib.SMTP("mail.gmx.net", port=587)
-    s.starttls()
-    s.login(setting.NOTIFY_MAIL_FROM, setting.NOTIFY_MAIL_PASSWORD)
-    s.send_message(msg)
-    s.quit()
+    with smtplib.SMTP("mail.gmx.net", port=587) as s:
+        s.starttls()
+        s.login(setting.NOTIFY_MAIL_FROM, setting.NOTIFY_MAIL_PASSWORD)
+        s.send_message(msg)

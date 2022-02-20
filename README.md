@@ -4,25 +4,25 @@ A simple project to notify users about upcoming exam for the Bavarian Fishing Ex
 
 ## Setup
 
-1. Create a GMX account
+1. Create a GMX account (mails will be send from this account)
 2. Create a spreadsheet with the following headers:
 
 - `Zeitstempel` -> Values of the form: `DD.MM.YYYY HH:MM:SS`
 - `E-Mail-Adresse`
 - `An- oder Abmeldung?` -> Valid values: `Anmeldung / Aktualisierung`, `Abmeldung`
 - `Nur bestimmte Regierungsbezirke?(Standard: Alle)`
-- `Prüfungszeitraum ab? (Standard: Heute)` -> Values of the form: `DD.MM.YYYY HH:MM:SS`
-- `Wie oft soll ich dich benachrichtigen, wenn Termine frei sind? (Standard: 1 Stunde)`-> only integer values
 
 ## Usage
 
 1. Expose the following env variables:
    - `GSHEET_SPREADSHEET_ID`: The ID of the Google Sheet (can be extracted from the spreadsheet’s url), e.g. `1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms`
+   - `SUBSCRIBE_URL`: The URL to subscribe to the service, e.g. `https://fishing-exam-alert.herokuapp.com/subscribe`
+   - `UNSUBSCRIBE_URL`: The URL to subscribe to the service, e.g. `https://fishing-exam-alert.herokuapp.com/unsubscribe`
    - `NOTIFY_MAIL_FROM`: The mail address for the GMX account, e.g. test@gmx.de
    - `NOTIFY_MAIL_PASSWORD`: The password for the GMX account
 2. Run the script with `python fishing_exam_alert/main.py`
 
-Note: You can check that all your credentials are working by running the script with `GSHEET_SPREADSHEET_ID=<your-gsheet-spreadsheet-id> NOTIFY_MAIL_FROM=<your-email-address> NOTIFY_MAIL_PASSWORD=<your-email-password> python fishing_exam_alert/check.py`.
+Note: You can check that all your credentials are working by running the script with `GSHEET_SPREADSHEET_ID=<your-gsheet-spreadsheet-id> SUBSCRIBE_URL=<subscribe-url> UNSUBSCRIBE_URL=<unsubscribe-url> NOTIFY_MAIL_FROM=<your-email-address> NOTIFY_MAIL_PASSWORD=<your-email-password> python fishing_exam_alert/check.py`.
 
 ## How it works
 

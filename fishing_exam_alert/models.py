@@ -9,11 +9,13 @@ from gspread import Spreadsheet
 from pandas import DataFrame
 from requests import Response
 
+from fishing_exam_alert.settings import setting
+
 DIRNAME = os.path.dirname(__file__)
 
 
 class ExamTableScraper:
-    exam_url = "https://fischerpruefung-online.bayern.de/fprApp/verwaltung/Pruefungssuche"
+    exam_url = setting.EXAM_SCRAP_URL
     exam_table_selector = "#pruefungsterminSearch\:pruefungsterminList > tbody > tr"
     exam_result_size_selector = "#pruefungsterminSearch > div.tableControl > span.resultSize"
     exam_table_columns = ["", "Datum", "Prüfungslokal", "Ort", "Regierungsbezirk", "Teilnehmer"]
@@ -84,6 +86,8 @@ class ExamTableScraper:
 
 
 class GSheetTable:
+    notification_column_name = "__auto__notified"
+
     def __init__(self, gsheet_key: str, sheet_number: int = 0) -> None:
         self.gsheet_key = gsheet_key
         self.sheet_number = sheet_number
@@ -102,7 +106,19 @@ class GSheetTable:
 
     def get_records_as_dataframe(self) -> DataFrame:
         df = pd.DataFrame(self.worksheet.get_all_records())
-        df["Zeitstempel"] = pd.to_datetime(df["Zeitstempel"])
+
+        df.drop(df[df["E-Mail-Adresse"] == ""].index, inplace=True)
+        df.reset_index(inplace=True, drop=True)
+
+        df["Zeitstempel"] = pd.to_datetime(df["Zeitstempel"])  # convert str to datetime
+
+        # add column for notification state
+        if self.notification_column_name not in df:
+            df[self.notification_column_name] = "FALSE"
+
+        # check that column has a default value for each row
+        df[self.notification_column_name].replace("", "FALSE", inplace=True)
+
         return df
 
     def get_active_records(self) -> DataFrame:
@@ -113,23 +129,53 @@ class GSheetTable:
         active_df = active_df[active_df["An- oder Abmeldung?"] == "Anmeldung / Aktualisierung"]
         return active_df
 
-    def get_active_records_starting_now(self) -> DataFrame:
-        active_df = self.get_active_records()
-        active_df_starting_now = active_df[active_df["Zeitstempel"] <= pd.Timestamp.now()]
-        return active_df_starting_now
+    def get_index_of_first_not_notified_record(self) -> int:
+        index = self.df.index
+        condition = self.df[self.notification_column_name] == "FALSE"
+        not_notified_indices = index[condition]
+        not_notified_indices_list = not_notified_indices.tolist()
+
+        if not not_notified_indices_list:
+            return -1
+
+        return not_notified_indices_list[0]
+
+    def mark_row_as_notified(self, row_index: int) -> None:
+        print(f"Mark row {row_index} as notified...")
+        self.df.loc[row_index, self.notification_column_name] = "TRUE"
+        row_to_mark = self.df.iloc[row_index]
+
+        print(
+            f"Marking row {row_index} (E-Mail: {row_to_mark['E-Mail-Adresse']}; Zeitstempel: {row_to_mark['Zeitstempel']}) as notified..."
+        )
+        self.worksheet.clear()
+        self.update()
+
+    def get_not_notified_records(self) -> DataFrame:
+        """Get all records that are not yet notified."""
+        df = self.df[self.df[self.notification_column_name] == "FALSE"]
+        return df
+
+    def update(self) -> None:
+        self.df["Zeitstempel"] = self.df["Zeitstempel"].dt.strftime("%d.%m.%Y %H:%M:%S")
+        self.worksheet.update([self.df.columns.values.tolist()] + self.df.values.tolist())
+
+    def refresh(self) -> None:
+        """Will get the latest data from the sheet."""
+        self.sheet = self.get_sheet()
+        self.worksheet = self.sheet.get_worksheet(self.sheet_number)
+        self.df = self.get_records_as_dataframe()
 
     def remove_old_records(self) -> None:
         """Overwrites the sheet with only active records"""
         cleaned_df = self.get_active_records()
-        cleaned_df["Zeitstempel"] = cleaned_df["Zeitstempel"].dt.strftime("%d.%m.%Y %H:%M:%S")
+        self.df = cleaned_df
         self.worksheet.clear()
-        self.worksheet.update([cleaned_df.columns.values.tolist()] + cleaned_df.values.tolist())
+        self.update()
 
     @staticmethod
-    def transform_df_to_notify_rows(records: DataFrame) -> List[dict]:
+    def transform_row_to_notify_dict(row) -> dict:
         """
-        Convert records to a list of notification rows.
-
         A notification row is a dict that looks like this:
         ```
         {
@@ -142,21 +188,28 @@ class GSheetTable:
         }
         ```
         """
+        notify_row = dict()
+
+        # add email
+        notify_row["email_notify"] = row["E-Mail-Adresse"]
+
+        # add filters
+        notify_row["filters"] = dict()
+        notify_row["filters"]["Teilnehmer"] = "Belegt"
+        locations = row["Nur bestimmte Regierungsbezirke? (Standard: Alle)"]
+        if locations:
+            notify_row["filters"]["Regierungsbezirk"] = locations.split(", ")
+
+        return notify_row
+
+    def transform_df_to_notify_rows(self, records: DataFrame) -> List[dict]:
+        """
+        Convert records to a list of notification rows.
+        """
         notify_rows = list()
 
         for idx, row in records.iterrows():
-            notify_row = dict()
-
-            # add email
-            notify_row["email_notify"] = row["E-Mail-Adresse"]
-
-            # add filters
-            notify_row["filters"] = dict()
-            notify_row["filters"]["Teilnehmer"] = "Frei"
-            locations = row["Nur bestimmte Regierungsbezirke? (Standard: Alle)"]
-            if locations:
-                notify_row["filters"]["Regierungsbezirk"] = locations.split(", ")
-
+            notify_row = self.transform_row_to_notify_dict(row)
             notify_rows.append(notify_row)
 
         return notify_rows

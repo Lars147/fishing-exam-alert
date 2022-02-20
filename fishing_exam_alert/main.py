@@ -5,9 +5,9 @@ from fishing_exam_alert.settings import setting
 
 
 def run():
-    # get gsheet dataa
+    # get gsheet data
     gsheet = models.GSheetTable(setting.GSHEET_SPREADSHEET_ID)
-    active_notifications = gsheet.get_active_records_starting_now()
+    active_notifications = gsheet.get_active_records()
     notifications = gsheet.transform_df_to_notify_rows(active_notifications)
 
     if not len(notifications):

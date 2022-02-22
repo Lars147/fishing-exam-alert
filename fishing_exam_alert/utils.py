@@ -2,6 +2,7 @@ import smtplib
 from email.message import EmailMessage
 from typing import List
 
+from mailersend import emails
 import pandas as pd
 
 from fishing_exam_alert.settings import setting
@@ -111,6 +112,50 @@ def send_confirmation_mail(email_to: str, filters: dict):
 
 def send_mail(email_to: str, subject: str, message: str, html_message: str = ""):
     """Send a mail. Optional with HTML content."""
+    if setting.MAIL_SERVICE == "mailersend":
+        send_mail_with_mailersend(email_to, subject, message, html_message)
+    else:
+        send_mail_with_gmx(email_to, subject, message, html_message)
+
+
+def send_mail_with_mailersend(email_to: str, subject: str, message: str, html_message: str = ""):
+    """Send a mail with mailersend. Optional with HTML content."""
+    mailer = emails.NewEmail(setting.NOTIFY_MAIL_PASSWORD)
+
+    mail_body = {}
+    mail_from = {
+        # "name": "Your Name",
+        "email": setting.NOTIFY_MAIL_FROM,
+    }
+    recipients = [
+        {
+            # "name": "Your Client",
+            "email": email_to,
+        }
+    ]
+
+    mailer.set_mail_from(mail_from, mail_body)
+    mailer.set_mail_to(recipients, mail_body)
+    mailer.set_subject(subject, mail_body)
+    mailer.set_plaintext_content(message, mail_body)
+    if html_message:
+        mailer.set_html_content(html_message, mail_body)
+
+    if setting.NOTIFY_MAIL_REPLY_TO:
+        reply_to = [
+            {
+                # "name": "Name",
+                "email": setting.NOTIFY_MAIL_REPLY_TO,
+            }
+        ]
+        mailer.set_reply_to(reply_to, mail_body)
+
+    # using print() will also return status code and data
+    mailer.send(mail_body)
+
+
+def send_mail_with_gmx(email_to: str, subject: str, message: str, html_message: str = ""):
+    """Send a mail with GMX. Optional with HTML content."""
     msg = EmailMessage()
     msg.set_content(message)
     if html_message:
@@ -118,6 +163,7 @@ def send_mail(email_to: str, subject: str, message: str, html_message: str = "")
     msg["Subject"] = subject
     msg["From"] = setting.NOTIFY_MAIL_FROM
     msg["To"] = email_to
+    # TODO: add reply_to for gmx
 
     with smtplib.SMTP("mail.gmx.net", port=587) as s:
         s.starttls()

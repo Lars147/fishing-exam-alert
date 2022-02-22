@@ -10,6 +10,7 @@ requests = "^2.27.1"
 beautifulsoup4 = "^4.10.0"
 pandas = "^1.4.1"
 gspread = "^5.1.1"
+mailersend = "^0.2.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"

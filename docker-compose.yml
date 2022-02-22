@@ -7,10 +7,14 @@ services:
     image: fishing-exam-alert-notifier
     env_file:
       - .env
+    volumes:
+      - ./fishing_exam_alert/google_creds:/fishing_exam_alert/google_creds
   email_confirmation:
     restart: "unless-stopped"
     image: fishing-exam-alert-notifier
     build: .
     env_file:
       - .env
+    volumes:
+      - ./fishing_exam_alert/google_creds:/fishing_exam_alert/google_creds
     command: python -u fishing_exam_alert/confirmation.py

@@ -1,5 +1,6 @@
 import os
-from typing import List
+from datetime import datetime
+from typing import List, Optional
 
 import gspread
 import pandas as pd
@@ -12,6 +13,77 @@ from requests import Response
 from fishing_exam_alert.settings import setting
 
 DIRNAME = os.path.dirname(__file__)
+
+import sqlmodel
+
+
+class User(sqlmodel.SQLModel, table=True):
+    id: Optional[int] = sqlmodel.Field(default=None, primary_key=True)
+    email: str
+    postal_code: Optional[str]
+    created_at: datetime = sqlmodel.Field(
+        sa_column=sqlmodel.Column(
+            sqlmodel.DateTime,
+            default=datetime.utcnow,
+            nullable=False,
+        )
+    )
+    updated_at: datetime = sqlmodel.Field(
+        sa_column=sqlmodel.Column(
+            sqlmodel.DateTime,
+            default=datetime.utcnow,
+            onupdate=datetime.utcnow,
+        )
+    )
+
+
+class EmailLog(sqlmodel.SQLModel, table=True):
+    id: Optional[int] = sqlmodel.Field(default=None, primary_key=True)
+    content: str
+    created_at: datetime = sqlmodel.Field(
+        sa_column=sqlmodel.Column(
+            sqlmodel.DateTime,
+            default=datetime.utcnow,
+            nullable=False,
+        )
+    )
+    user_id: Optional[int] = sqlmodel.Field(default=None, foreign_key="user.id")
+
+
+class Exam(sqlmodel.SQLModel, table=True):
+    """A fishing license exam.
+    
+    This model is mapped to the values of the "printing view" of
+    https://fischerpruefung-online.bayern.de/fprApp/verwaltung/Pruefungssuche.
+    """
+    id: Optional[int] = sqlmodel.Field(default=None, primary_key=True)
+    exam_id: str
+    name: str
+    street: str
+    street_number: str
+    city: str
+    postal_code: str
+    exam_start: datetime
+    min_participants: int
+    max_participants: int
+    current_participants: int
+    status: str
+    disabled_access: bool
+    headphones: bool
+    created_at: datetime = sqlmodel.Field(
+        sa_column=sqlmodel.Column(
+            sqlmodel.DateTime,
+            default=datetime.utcnow,
+            nullable=False,
+        )
+    )
+    updated_at: datetime = sqlmodel.Field(
+        sa_column=sqlmodel.Column(
+            sqlmodel.DateTime,
+            default=datetime.utcnow,
+            onupdate=datetime.utcnow,
+        )
+    )
 
 
 class ExamTableScraper:

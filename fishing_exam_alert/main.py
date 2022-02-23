@@ -3,6 +3,8 @@ import time
 from fishing_exam_alert import models, utils
 from fishing_exam_alert.settings import setting
 
+from db import engine, SQLModel
+
 
 def run():
     # get gsheet data
@@ -31,6 +33,7 @@ def run():
 
 
 if __name__ == "__main__":
+    SQLModel.metadata.create_all(engine)    # init db
     while True:
         run()
         print("Sleeping for 1 hour...")

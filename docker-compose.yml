@@ -8,7 +8,7 @@ services:
     env_file:
       - .env
     volumes:
-      - ./database.sqlite:/database.sqlite
+      - ./database.sqlite:/fishing_exam_alert/database.sqlite
       - ./fishing_exam_alert/google_creds:/fishing_exam_alert/google_creds
   email_confirmation:
     restart: "unless-stopped"

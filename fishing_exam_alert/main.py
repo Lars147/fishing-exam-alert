@@ -18,6 +18,7 @@ def sync_users_from_gsheet(gsheet: models.GSheetTable):
 def run():
     # get gsheet data
     gsheet = models.GSheetTable(setting.GSHEET_SPREADSHEET_ID)
+    sync_users_from_gsheet(gsheet)
     active_notifications = gsheet.get_active_records()
     notifications = gsheet.transform_df_to_notify_rows(active_notifications)
 

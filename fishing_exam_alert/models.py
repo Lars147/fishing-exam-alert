@@ -5,30 +5,34 @@ from typing import List, Optional
 import gspread
 import pandas as pd
 import requests
+import sqlmodel
 from bs4 import BeautifulSoup
 from gspread import Spreadsheet
 from pandas import DataFrame
 from requests import Response
+from sqlmodel.sql.expression import Select, SelectOfScalar
 
 from fishing_exam_alert.settings import setting
 
 DIRNAME = os.path.dirname(__file__)
 
-import sqlmodel
+# ignore SAWarnings
+SelectOfScalar.inherit_cache = True  # type: ignore
+Select.inherit_cache = True  # type: ignore
 
 
 class User(sqlmodel.SQLModel, table=True):
     id: Optional[int] = sqlmodel.Field(default=None, primary_key=True)
-    email: str
-    postal_code: Optional[str]
-    created_at: datetime = sqlmodel.Field(
+    email: str = sqlmodel.Field(sa_column=sqlmodel.Column("email", sqlmodel.String, unique=True))
+    postal_code: Optional[str] = ""
+    created_at: Optional[datetime] = sqlmodel.Field(
         sa_column=sqlmodel.Column(
             sqlmodel.DateTime,
             default=datetime.utcnow,
             nullable=False,
         )
     )
-    updated_at: datetime = sqlmodel.Field(
+    updated_at: Optional[datetime] = sqlmodel.Field(
         sa_column=sqlmodel.Column(
             sqlmodel.DateTime,
             default=datetime.utcnow,
@@ -36,11 +40,46 @@ class User(sqlmodel.SQLModel, table=True):
         )
     )
 
+    @classmethod
+    def get(cls, db: sqlmodel.Session, id: int) -> "User":
+        statement = sqlmodel.select(cls).where(cls.id == id)
+        results = db.exec(statement)
+        return results.one()
+
+    @classmethod
+    def delete(cls, db: sqlmodel.Session, id: int) -> bool:
+        user = cls.get(db, id=id)
+        if user:
+            db.delete(user)
+            return True
+        return False
+        
+
+    @classmethod
+    def get_or_create(cls, db: sqlmodel.Session, email: str) -> "User":
+        user = cls.get_user_by_mail(db, email=email)
+        if user:
+            return user
+        user = cls(email=email)
+        db.add(user)
+        db.commit()
+        return user
+
+    @classmethod
+    def get_user_by_mail(cls, db: sqlmodel.Session, email: str) -> Optional["User"]:
+        statement = sqlmodel.select(cls).where(cls.email == email)
+        results = db.exec(statement)
+        return results.first()
+
+    def create_email_log(self, db: sqlmodel.Session, content: str) -> None:
+        mail = EmailLog(content=content, user_id=self.id)
+        db.add(mail)
+
 
 class EmailLog(sqlmodel.SQLModel, table=True):
     id: Optional[int] = sqlmodel.Field(default=None, primary_key=True)
     content: str
-    created_at: datetime = sqlmodel.Field(
+    created_at: Optional[datetime] = sqlmodel.Field(
         sa_column=sqlmodel.Column(
             sqlmodel.DateTime,
             default=datetime.utcnow,
@@ -49,13 +88,23 @@ class EmailLog(sqlmodel.SQLModel, table=True):
     )
     user_id: Optional[int] = sqlmodel.Field(default=None, foreign_key="user.id")
 
+    @classmethod
+    def get_latest_mail_by_user_mail(cls, db: sqlmodel.Session, email: str) -> Optional["EmailLog"]:
+        user = User.get_user_by_mail(db, email=email)
+        if not user:
+            return
+        statement = sqlmodel.select(cls).where(cls.user_id == user.id).order_by(cls.created_at).limit(1)
+        results = db.exec(statement)
+        return results.first()
+
 
 class Exam(sqlmodel.SQLModel, table=True):
     """A fishing license exam.
-    
+
     This model is mapped to the values of the "printing view" of
     https://fischerpruefung-online.bayern.de/fprApp/verwaltung/Pruefungssuche.
     """
+
     id: Optional[int] = sqlmodel.Field(default=None, primary_key=True)
     exam_id: str
     name: str

@@ -1,10 +1,13 @@
+import email
 import smtplib
 from email.message import EmailMessage
 from typing import List
 
-from mailersend import emails
 import pandas as pd
+from mailersend import emails
+from sqlmodel import Session, select
 
+from fishing_exam_alert import db, models
 from fishing_exam_alert.settings import setting
 
 
@@ -110,12 +113,28 @@ def send_confirmation_mail(email_to: str, filters: dict):
     send_mail(email_to, "Anmeldung - Fischereiprüfungs Alarm!", message, html_message)
 
 
-def send_mail(email_to: str, subject: str, message: str, html_message: str = ""):
+def send_mail(email_to: str, subject: str, message: str, html_message: str = "", send_duplicate: bool = False):
     """Send a mail. Optional with HTML content."""
+
+    if not send_duplicate:
+        with Session(db.engine) as session:
+            latest_mail = models.EmailLog.get_latest_mail_by_user_mail(db=session, email=email_to)
+
+        if latest_mail and latest_mail.content == message:
+            print(f"Skip sending mail to {email_to} because it was already sent.")
+            return  # don't send duplicate mail content
+
     if setting.MAIL_SERVICE == "mailersend":
         send_mail_with_mailersend(email_to, subject, message, html_message)
     else:
         send_mail_with_gmx(email_to, subject, message, html_message)
+
+    with Session(db.engine) as session:
+        user = models.User.get_user_by_mail(session, email=email_to)
+        if not user:
+            raise Exception(f"User with mail {email_to} not found")
+        user.create_email_log(session, content=message)
+        session.commit()
 
 
 def send_mail_with_mailersend(email_to: str, subject: str, message: str, html_message: str = ""):

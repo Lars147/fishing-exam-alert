@@ -10,7 +10,7 @@ class Settings:
     UNSUBSCRIBE_URL: str = os.environ["UNSUBSCRIBE_URL"]
     MAIL_SERVICE: str = os.environ["MAIL_SERVICE"]  # either GMX or mailersend
     NOTIFY_MAIL_FROM: str = os.environ["NOTIFY_MAIL_FROM"]
-    NOTIFY_MAIL_REPLY_TO: str = os.getenv("NOTIFY_MAIL_REPLY_TO", "")   # optional: reply_to mail address
+    NOTIFY_MAIL_REPLY_TO: str = os.getenv("NOTIFY_MAIL_REPLY_TO", "")  # optional: reply_to mail address
     NOTIFY_MAIL_PASSWORD: str = os.environ["NOTIFY_MAIL_PASSWORD"]
 
     def __init__(self):

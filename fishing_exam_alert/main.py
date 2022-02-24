@@ -1,9 +1,18 @@
 import time
 
-from fishing_exam_alert import models, utils
+from sqlmodel import Session
+
+from fishing_exam_alert import db, models, utils
 from fishing_exam_alert.settings import setting
 
-from db import engine, SQLModel
+
+def sync_users_from_gsheet(gsheet: models.GSheetTable):
+    active_notifications = gsheet.get_active_records()
+    emails = active_notifications["E-Mail-Adresse"]
+    
+    with Session(db.engine) as session:
+        for mail in emails:
+            models.User.get_or_create(session, email=mail)
 
 
 def run():
@@ -33,7 +42,7 @@ def run():
 
 
 if __name__ == "__main__":
-    SQLModel.metadata.create_all(engine)    # init db
+    db.SQLModel.metadata.create_all(db.engine)  # init db
     while True:
         run()
         print("Sleeping for 1 hour...")

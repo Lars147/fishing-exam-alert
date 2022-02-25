@@ -46,5 +46,6 @@ if __name__ == "__main__":
     db.SQLModel.metadata.create_all(db.engine)  # init db
     while True:
         run()
-        print("Sleeping for 1 hour...")
-        time.sleep(60 * 60 * 1)
+        minutes_to_sleep = 60 * setting.RUN_INTERVAL_MINUTES
+        print(f"Sleeping for {minutes_to_sleep} minutes...")
+        time.sleep(minutes_to_sleep)

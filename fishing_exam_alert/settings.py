@@ -2,6 +2,7 @@ import os
 
 
 class Settings:
+    RUN_INTERVAL_MINUTES: int = int(os.getenv("RUN_INTERVAL_MINUTES", "60"))
     EXAM_SCRAP_URL: str = (
         os.environ.get("EXAM_SCRAP_URL") or "https://fischerpruefung-online.bayern.de/fprApp/verwaltung/Pruefungssuche"
     )

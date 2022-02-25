@@ -15,7 +15,7 @@ def sync_users_from_gsheet() -> None:
     with Session(db.engine) as session:
         for idx, row in user_updates.iterrows():
             active = row["An- oder Abmeldung?"] == "Anmeldung / Aktualisierung"
-            defaults = {"active": active}
+            defaults = {"active": active, "districts": row["Nur bestimmte Regierungsbezirke? (Standard: Alle)"]}
             models.User.update_or_create(session, email=row["E-Mail-Adresse"], defaults=defaults)
 
 

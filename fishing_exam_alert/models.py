@@ -60,7 +60,7 @@ class User(sqlmodel.SQLModel, table=True):
     def district_list(self) -> List[District]:
         if not self.districts:
             return []
-        return [District(d) for d in self.districts.split(",")]
+        return [District(d.strip()) for d in self.districts.split(",")]
 
     @classmethod
     def get(cls, db: sqlmodel.Session, id: int) -> "User":

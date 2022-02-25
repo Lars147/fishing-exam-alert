@@ -93,7 +93,7 @@ class EmailLog(sqlmodel.SQLModel, table=True):
         user = User.get_user_by_mail(db, email=email)
         if not user:
             return
-        statement = sqlmodel.select(cls).where(cls.user_id == user.id).order_by(cls.created_at).limit(1)
+        statement = sqlmodel.select(cls).where(cls.user_id == user.id).order_by(cls.created_at.desc()).limit(1)
         results = db.exec(statement)
         return results.first()
 

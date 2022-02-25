@@ -95,7 +95,7 @@ def send_confirmation_mail(email_to: str, filters: dict):
     kannst du dich hier abmelden: {setting.UNSUBSCRIBE_URL}.
     """
 
-    filters_text_html = [f"<li>{key}: {value}</li>" for key, value in filters.items()]
+    filters_text_html = "\n".join([f"<li>{key}: {value}</li>" for key, value in filters.items()])
     html_message = f"""
     Hi {email_to_username},<br/>
     du erhälst diese Mail, weil du dich für den Fischereiprüfungs Alarm angemeldet hast.<br/>

@@ -47,5 +47,5 @@ if __name__ == "__main__":
     while True:
         run()
         minutes_to_sleep = 60 * setting.RUN_INTERVAL_MINUTES
-        print(f"Sleeping for {minutes_to_sleep} minutes...")
+        print(f"Sleeping for {setting.RUN_INTERVAL_MINUTES} minutes...")
         time.sleep(minutes_to_sleep)

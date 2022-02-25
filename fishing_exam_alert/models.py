@@ -1,6 +1,7 @@
+import enum
 import os
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import gspread
 import pandas as pd
@@ -8,10 +9,13 @@ import requests
 import sqlmodel
 from bs4 import BeautifulSoup
 from gspread import Spreadsheet
+from loguru import logger
 from pandas import DataFrame
 from requests import Response
+from sqlalchemy import types
 from sqlmodel.sql.expression import Select, SelectOfScalar
 
+from fishing_exam_alert import utils
 from fishing_exam_alert.settings import setting
 
 DIRNAME = os.path.dirname(__file__)
@@ -21,10 +25,22 @@ SelectOfScalar.inherit_cache = True  # type: ignore
 Select.inherit_cache = True  # type: ignore
 
 
+class District(str, enum.Enum):
+    Oberbayern = "Oberbayern"
+    Niederbayern = "Niederbayern"
+    Schwaben = "Schwaben"
+    Oberpfalz = "Oberpfalz"
+    Unterfranken = "Unterfranken"
+    Mittelfranken = "Mittelfranken"
+    Oberfranken = "Oberfranken"
+
+
 class User(sqlmodel.SQLModel, table=True):
     id: Optional[int] = sqlmodel.Field(default=None, primary_key=True)
     email: str = sqlmodel.Field(sa_column=sqlmodel.Column("email", sqlmodel.String, unique=True))
+    districts: Optional[str] = ""
     postal_code: Optional[str] = ""
+    active: bool = True
     created_at: Optional[datetime] = sqlmodel.Field(
         sa_column=sqlmodel.Column(
             sqlmodel.DateTime,
@@ -40,6 +56,12 @@ class User(sqlmodel.SQLModel, table=True):
         )
     )
 
+    @property
+    def district_list(self) -> List[District]:
+        if not self.districts:
+            return []
+        return [District(d) for d in self.districts.split(",")]
+
     @classmethod
     def get(cls, db: sqlmodel.Session, id: int) -> "User":
         statement = sqlmodel.select(cls).where(cls.id == id)
@@ -53,31 +75,58 @@ class User(sqlmodel.SQLModel, table=True):
             db.delete(user)
             return True
         return False
-        
 
     @classmethod
-    def get_or_create(cls, db: sqlmodel.Session, email: str) -> "User":
-        user = cls.get_user_by_mail(db, email=email)
-        if user:
-            return user
-        user = cls(email=email)
-        db.add(user)
-        db.commit()
-        return user
+    def get_or_create(cls, db: sqlmodel.Session, email: str, defaults: Dict[str, Any] = {}) -> Tuple["User", bool]:
+        user = cls.get_by_mail(db, email=email)
+        created = False
+        if not user:
+            user = cls(email=email)
+            if defaults:
+                for k, v in defaults.items():
+                    setattr(user, k, v)
+            db.add(user)
+            db.commit()
+            created = True
+        return user, created
 
     @classmethod
-    def get_user_by_mail(cls, db: sqlmodel.Session, email: str) -> Optional["User"]:
+    def update_or_create(cls, db: sqlmodel.Session, email: str, defaults: Dict[str, Any] = {}) -> Tuple["User", bool]:
+        user, created = cls.get_or_create(db, email=email, defaults=defaults)
+        if not created:
+            for k, v in defaults.items():
+                setattr(user, k, v)
+            db.add(user)
+            db.commit()
+        return user, created
+
+    @classmethod
+    def get_by_mail(cls, db: sqlmodel.Session, email: str) -> Optional["User"]:
         statement = sqlmodel.select(cls).where(cls.email == email)
         results = db.exec(statement)
         return results.first()
 
-    def create_email_log(self, db: sqlmodel.Session, content: str) -> None:
-        mail = EmailLog(content=content, user_id=self.id)
+    @classmethod
+    def get_multi_by_active(cls, db: sqlmodel.Session, active: bool) -> List["User"]:
+        statement = sqlmodel.select(cls).where(cls.active == active)
+        results = db.exec(statement)
+        return results.all()
+
+    def create_email_log(self, db: sqlmodel.Session, category: "EmailLogCategory", content: str) -> None:
+        mail = EmailLog(category=category, content=content, user_id=self.id)
         db.add(mail)
+        db.commit()
+
+
+class EmailLogCategory(str, enum.Enum):
+    subscribe = "subscribe"
+    unsubscribe = "unsubscribe"
+    notification = "notification"
 
 
 class EmailLog(sqlmodel.SQLModel, table=True):
     id: Optional[int] = sqlmodel.Field(default=None, primary_key=True)
+    category: EmailLogCategory = sqlmodel.Field(sa_column=sqlmodel.Column(types.Enum(EmailLogCategory)))
     content: str
     created_at: Optional[datetime] = sqlmodel.Field(
         sa_column=sqlmodel.Column(
@@ -90,7 +139,7 @@ class EmailLog(sqlmodel.SQLModel, table=True):
 
     @classmethod
     def get_latest_mail_by_user_mail(cls, db: sqlmodel.Session, email: str) -> Optional["EmailLog"]:
-        user = User.get_user_by_mail(db, email=email)
+        user = User.get_by_mail(db, email=email)
         if not user:
             return
         statement = sqlmodel.select(cls).where(cls.user_id == user.id).order_by(cls.created_at.desc()).limit(1)
@@ -112,6 +161,7 @@ class Exam(sqlmodel.SQLModel, table=True):
     street_number: str
     city: str
     postal_code: str
+    district: District
     exam_start: datetime
     min_participants: int
     max_participants: int
@@ -119,14 +169,14 @@ class Exam(sqlmodel.SQLModel, table=True):
     status: str
     disabled_access: bool
     headphones: bool
-    created_at: datetime = sqlmodel.Field(
+    created_at: Optional[datetime] = sqlmodel.Field(
         sa_column=sqlmodel.Column(
             sqlmodel.DateTime,
             default=datetime.utcnow,
             nullable=False,
         )
     )
-    updated_at: datetime = sqlmodel.Field(
+    updated_at: Optional[datetime] = sqlmodel.Field(
         sa_column=sqlmodel.Column(
             sqlmodel.DateTime,
             default=datetime.utcnow,
@@ -134,63 +184,193 @@ class Exam(sqlmodel.SQLModel, table=True):
         )
     )
 
+    @classmethod
+    def get_exam_by_exam_id(cls, db: sqlmodel.Session, exam_id: str) -> Optional["Exam"]:
+        statement = sqlmodel.select(cls).where(cls.exam_id == exam_id)
+        results = db.exec(statement)
+        return results.first()
+
+    @classmethod
+    def get_or_create(cls, db: sqlmodel.Session, exam_id: str, defaults: dict = {}) -> "Exam":
+        exam = cls.get_exam_by_exam_id(db, exam_id=exam_id)
+        if not exam:
+            exam = cls(exam_id=exam_id)
+            if defaults:
+                for k, v in defaults.items():
+                    setattr(exam, k, v)
+            db.add(exam)
+            db.commit()
+        return exam
+
+    @classmethod
+    def get_multi_as_dataframe(
+        cls,
+        db: sqlmodel.Session,
+        status: Optional[str] = None,
+        exam_start__min: Optional[datetime] = None,
+        districts__in: Optional[List[District]] = None,
+    ) -> DataFrame:
+        statement = cls.get_multi_statement(
+            status=status,
+            exam_start__min=exam_start__min,
+            districts__in=districts__in,
+        )
+        return pd.read_sql(statement, db.connection())
+
+    @classmethod
+    def get_multi(
+        cls,
+        db: sqlmodel.Session,
+        status: Optional[str] = None,
+        exam_start__min: Optional[datetime] = None,
+        districts__in: Optional[List[District]] = None,
+    ) -> List[Optional["Exam"]]:
+        statement = cls.get_multi_statement(
+            status=status,
+            exam_start__min=exam_start__min,
+            districts__in=districts__in,
+        )
+
+        results = db.exec(statement)
+        return results.all()
+
+    @classmethod
+    def get_multi_statement(
+        cls,
+        status: Optional[str] = None,
+        exam_start__min: Optional[datetime] = None,
+        districts__in: Optional[List[District]] = None,
+    ):
+        statement = sqlmodel.select(cls)
+
+        if status:
+            statement = statement.where(cls.status == status)
+
+        if exam_start__min:
+            statement = statement.where(cls.exam_start >= exam_start__min)
+
+        if districts__in:
+            statement = statement.where(cls.district.in_(districts__in))
+
+        return statement
+
+
+class ExamUserDistance(sqlmodel.SQLModel, table=True):
+    id: Optional[int] = sqlmodel.Field(default=None, primary_key=True)
+    distance: float
+    duration: int
+    user_id: Optional[int] = sqlmodel.Field(default=None, foreign_key="user.id")
+    exam_id: Optional[int] = sqlmodel.Field(default=None, foreign_key="exam.id")
+
 
 class ExamTableScraper:
     exam_url = setting.EXAM_SCRAP_URL
-    exam_table_selector = "#pruefungsterminSearch\:pruefungsterminList > tbody > tr"
-    exam_result_size_selector = "#pruefungsterminSearch > div.tableControl > span.resultSize"
-    exam_table_columns = ["", "Datum", "Prüfungslokal", "Ort", "Regierungsbezirk", "Teilnehmer"]
+    exam_overview_response: Optional[requests.Response] = None
+    exam_detail_response: Optional[requests.Response] = None
+    exam_overview_columns: List[str] = ["", "Prüfungstermin", "Prüfungslokal", "Ort", "Regierungsbezirk", "Teilnehmer"]
 
     def __init__(self):
-        self._exam_response = self.get_exam_response()
-        self.exam_response_content = self.exam_response.content.decode("utf-8")
-        self.exam_rows = self._parse_exam_table()
-        self.exams_result_size = self._parse_result_size()  # e.g. ['1', '-', '36', 'von', '36']
+        self.set_responses()
+        self.exams = self._parse_exam_tables()
 
-    @property
-    def exam_response(self) -> Response:
-        return self._exam_response
+    def get_exam_responses(self) -> List[Response]:
+        # use a session to store cookie
+        logger.info("Get exam responses...")
 
-    def get_exam_response(self) -> Response:
-        print(f"Get exams from {self.exam_url} ...")
-        res = requests.get(self.exam_url)
-        return res
+        responses = list()
+        with requests.Session() as s:
+            logger.info(f"Get cookie and CSRF-Token from {self.exam_url} ...")
+            res_exam_url = s.get(self.exam_url)
+            responses.append(res_exam_url)
 
-    def get_exams(self, **filter_queries):
-        filtered_exams = self.exam_rows  # init with all rows
+            soup = BeautifulSoup(res_exam_url.content.decode("utf-8"), "html.parser")
 
-        for field_name, search_value in filter_queries.items():
+            # get the CSRF-Token
+            logger.debug("Search for cookie in response...")
+            csrf_input_field = soup.find("input", {"name": "_csrf"})
+            if not csrf_input_field:
+                raise Exception("CSRF input field not found!")
+            csrf_token = csrf_input_field["value"]
+            logger.debug("Found cookie in response!")
 
-            if field_name not in self.exam_table_columns:
-                raise ValueError(f"Field name '{field_name}' is not a valid column name!")
+            # get the printed view of the exam table (contains more info on exams)
+            data = {
+                "pruefungsterminSearch": "pruefungsterminSearch",
+                "_csrf": csrf_token,
+                "pruefungsterminSearch:j_idt190": "Druckansicht",
+                "javax.faces.ViewState": "e1s1",
+            }
+            printed_res = s.post(f"{self.exam_url}?execution=e1s1", data=data)
+            responses.append(printed_res)
 
-            filtered_exams = [row for row in filtered_exams if row[field_name] == search_value]
+        return responses
 
-        return filtered_exams
+    def set_responses(self) -> None:
+        self.exam_overview_response, self.exam_detail_response = self.get_exam_responses()
 
-    def has_all_results(self) -> bool:
-        if len(self.exams_result_size) == 5:
-            return False
-        return self.exams_result_size[2] == self.exams_result_size[4]
+    def sync_exams_to_db(self, db: sqlmodel.Session) -> None:
+        for exam in self.exams:
+            exam_in = Exam.get_or_create(db, exam_id=exam.exam_id, defaults=exam.dict(exclude_unset=True))
+            db.add(exam_in)
+        db.commit()
 
-    def _parse_result_size(self) -> list:
-        soup = BeautifulSoup(self.exam_response_content, "html.parser")
+    def _parse_exam_tables(self) -> List[Exam]:
+        logger.info("Parse exam overview table...")
+        soup_overview = BeautifulSoup(self.exam_overview_response.content.decode("utf-8"), "html.parser")
+        overview_values = self._extract_overview_table(soup_overview)
+        logger.info("Parsed exam overview table!")
 
-        result_size_selection = soup.select(self.exam_result_size_selector)
-        if not result_size_selection:
-            return []
+        logger.info("Parse exam detail table...")
+        soup = BeautifulSoup(self.exam_detail_response.content.decode("utf-8"), "html.parser")
+        tables = soup.select("#pruefungverwaltung > div:nth-child(2) > div.rf-p-b > div > div.rf-p-b")
+        logger.debug(f"Found {len(tables)} tables!")
 
-        result_size_string = result_size_selection[0].string
-        if not result_size_string:
-            return []
+        rows = list()
+        for table in tables:
+            raw_table_data = self._extract_detail_table(table)
 
-        result_size = result_size_string.split("\n")
-        return [t.strip() for t in result_size if t.strip()]
+            # get the district by exam overview table
+            district = self._match_overview_table_row(overview_values, raw_table_data)
 
-    def _parse_exam_table(self) -> List[dict]:
-        soup = BeautifulSoup(self.exam_response_content, "html.parser")
+            # create exam datetime and localize it
+            exam_start_str = f'{raw_table_data["Prüfungstermin"]} {raw_table_data["Prüfungsbeginn"]}'
+            exam_start_dt = datetime.strptime(exam_start_str, "%d.%m.%Y %H:%M")
+            exam_start = utils.localize_datetime(exam_start_dt)
 
-        table_rows = soup.select(self.exam_table_selector)
+            rows.append(
+                Exam(
+                    exam_id=raw_table_data["Prüfungs-Nr."],
+                    name=raw_table_data["Prüfungslokal"],
+                    street=raw_table_data["Straße"],
+                    street_number=raw_table_data["Haus-Nr."],
+                    city=raw_table_data["Ort"],
+                    postal_code=raw_table_data["PLZ"],
+                    district=district,
+                    exam_start=exam_start,
+                    min_participants=raw_table_data["Min. Teilnehmer"],
+                    max_participants=raw_table_data["Max. Teilnehmer"],
+                    current_participants=raw_table_data["Aktuelle Teilnehmer"],
+                    status=raw_table_data["Status"],
+                    disabled_access=bool(raw_table_data["Behindertengerecht"]),
+                    headphones=bool(raw_table_data["Kopfhörer"]),
+                )
+            )
+        return rows
+
+    def _match_overview_table_row(self, overview_table: List[Dict[str, str]], detail_table: Dict[str, str]) -> District:
+        for row in overview_table:
+            if row["Prüfungslokal"] != detail_table["Prüfungslokal"]:
+                continue
+            if row["Ort"] != detail_table["Ort"]:
+                continue
+            if row["Prüfungstermin"] != f'{detail_table["Prüfungstermin"]}, {detail_table["Prüfungsbeginn"]}':
+                continue
+            return District(row["Regierungsbezirk"])
+        raise Exception(f"Could not match row {detail_table}")
+
+    def _extract_overview_table(self, table_soup: BeautifulSoup) -> List[Dict[str, str]]:
+        exam_table_selector = "#pruefungsterminSearch\:pruefungsterminList > tbody > tr"
+        table_rows = table_soup.select(exam_table_selector)
         print(f"Found {len(table_rows)} exams...")
 
         rows = list()
@@ -198,11 +378,26 @@ class ExamTableScraper:
             rows.append(self._extract_table_row(row))
         return rows
 
-    def _extract_table_row(self, row) -> dict:
+    def _extract_table_row(self, row) -> Dict[str, str]:
         columns = row.select("td")
         table_row = dict()
-        for name, col in zip(self.exam_table_columns, columns):
-            table_row[name] = col.text
+        for name, col in zip(self.exam_overview_columns, columns):
+            table_row[name] = col.text.strip()
+        return table_row
+
+    def _extract_detail_table(self, table_soup) -> Dict[str, str]:
+        """Extract the details of an exam table"""
+        table_names = table_soup.select(".prop > .name")
+        table_values = table_soup.select(".prop > .value")
+        table_row = dict()
+        for name, value in zip(table_names, table_values):
+            val = value.text.strip()
+            if not val:
+                try:
+                    val = value.select(".checkbox")[0].get("checked", "")
+                except KeyError as e:
+                    val = None
+            table_row[name.text.strip()] = val
         return table_row
 
 
@@ -242,11 +437,15 @@ class GSheetTable:
 
         return df
 
+    def get_record_updates(self) -> DataFrame:
+        update_df = self.df.copy()
+        update_df = update_df.sort_values(by="Zeitstempel")
+        update_df = update_df.drop_duplicates(subset=["E-Mail-Adresse"], keep="last")
+        return update_df
+
     def get_active_records(self) -> DataFrame:
         """Keep only last record per unique "E-Mail-Adresse" and only if it is has the value "Anmeldung"."""
-        active_df = self.df.copy()
-        active_df = active_df.sort_values(by="Zeitstempel")
-        active_df = active_df.drop_duplicates(subset=["E-Mail-Adresse"], keep="last")
+        active_df = self.get_record_updates()
         active_df = active_df[active_df["An- oder Abmeldung?"] == "Anmeldung / Aktualisierung"]
         return active_df
 

@@ -1,6 +1,6 @@
 import time
 
-from fishing_exam_alert import models, utils
+from fishing_exam_alert import models, notifier
 from fishing_exam_alert.settings import setting
 
 
@@ -23,10 +23,10 @@ def main():
     # send mail
     if row_to_notify["An- oder Abmeldung?"] == "Anmeldung / Aktualisierung":
         print(f"Send confirmation mail to {notification_row['email_notify']}...")
-        utils.send_confirmation_mail(notification_row["email_notify"], notification_row["filters"])
+        notifier.send_confirmation_mail(notification_row["email_notify"], notification_row["filters"])
     elif row_to_notify["An- oder Abmeldung?"] == "Abmeldung":
         print(f"Send unsubscribe mail to {notification_row['email_notify']}...")
-        utils.send_unsubscribe_mail(notification_row["email_notify"])
+        notifier.send_unsubscribe_mail(notification_row["email_notify"])
     else:
         print(f"Unknown value for An- oder Abmeldung?: {row_to_notify['An- oder Abmeldung?']}")
 

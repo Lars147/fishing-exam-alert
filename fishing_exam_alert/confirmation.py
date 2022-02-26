@@ -36,4 +36,4 @@ def main():
 if __name__ == "__main__":
     while True:
         main()
-        time.sleep(5)
+        time.sleep(setting.CONFIRMATION_INTERVAL_SECONDS)

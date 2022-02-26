@@ -2,6 +2,7 @@ import os
 
 
 class Settings:
+    CONFIRMATION_INTERVAL_SECONDS: int = int(os.getenv("CONFIRMATION_INTERVAL_SECONDS", "10"))
     RUN_INTERVAL_MINUTES: int = int(os.getenv("RUN_INTERVAL_MINUTES", "60"))
     EXAM_SCRAP_URL: str = (
         os.environ.get("EXAM_SCRAP_URL") or "https://fischerpruefung-online.bayern.de/fprApp/verwaltung/Pruefungssuche"

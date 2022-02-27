@@ -20,7 +20,7 @@ def sync_users_from_gsheet() -> None:
             defaults = {
                 "active": active,
                 "districts": row["Welche Bezirke kommen für dich in Frage?"],
-                "max_travel_duration": int(row["Maximale Fahrzeit zur Prüfung (in Minuten)?"]),
+                "max_travel_duration": int(row["Maximale Fahrzeit zur Prüfung (in Minuten)?"] or "0"),
                 "postal_code": row["Deine PLZ"],
                 "need_headphones": "Kopfhörer" in row["Welche Ausstattung soll der Prüfungsort erfüllen?"],
                 "need_disabled_access": "Behindertengerecht"

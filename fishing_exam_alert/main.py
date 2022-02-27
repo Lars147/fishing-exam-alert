@@ -39,7 +39,7 @@ def get_active_exams(db: sqlmodel.Session, user: models.User) -> pd.DataFrame:
     # filter the exams for the user settings
     filtered_exams = models.Exam.get_multi(
         db=db,
-        # status="Frei",
+        status="Frei",
         exam_start__min=datetime.utcnow(),
         districts__in=user.district_list or None,
         disabled_access=user.need_disabled_access or None,

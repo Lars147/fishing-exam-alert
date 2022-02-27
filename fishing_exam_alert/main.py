@@ -58,7 +58,8 @@ def get_active_exams(db: sqlmodel.Session, user: models.User) -> pd.DataFrame:
             travel_distance = distance_in.get_distance(db=db)
 
             # if the duration is smaller than the user's max travel duration, add the exam to the list
-            if travel_duration < user.max_travel_duration * 60:  # user stores duration in minutes
+            cutoff_travel_duration_for_user_in_minutes = user.max_travel_duration + 10  # 10 minutes buffer
+            if travel_duration < cutoff_travel_duration_for_user_in_minutes * 60:  # for comparison convert to seconds
                 exams_for_user.append(
                     exam.dict()
                     | {

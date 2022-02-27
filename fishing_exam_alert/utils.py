@@ -3,6 +3,8 @@ from urllib.parse import quote_plus
 
 import googlemaps
 import pandas as pd
+import requests
+from loguru import logger
 from pytz import timezone
 
 from fishing_exam_alert.settings import setting
@@ -80,3 +82,8 @@ def get_distance_from_gmaps(start_address: str, end_address: str) -> dict:
     gmaps = googlemaps.Client(key=setting.GMAP_API_KEY)
     directions_result = gmaps.directions(start_address, end_address)  # type: ignore # directions is member of gmaps
     return directions_result
+
+
+def notify_admin_via_gchat(message: str) -> None:
+    logger.info(f"Sending message to admin via gchat: {message[:40]}{'...' if len(message) > 40 else ''}")
+    requests.post(setting.GCHAT_WEBHOOK_URL, json={"text": message})

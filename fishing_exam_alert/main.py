@@ -102,7 +102,12 @@ def run():
 if __name__ == "__main__":
     db.SQLModel.metadata.create_all(db.engine)  # init db
     while True:
-        run()
-        minutes_to_sleep = 60 * setting.RUN_INTERVAL_MINUTES
+        try:
+            run()
+            utils.notify_admin_via_gchat(f"Fishing Exam Alert: Successfully ran script at {datetime.now()}")
+        except Exception as e:
+            utils.notify_admin_via_gchat(f"<users/all> An error occurred:\n\n{e}")
+            raise e
+
         logger.info(f"Sleeping for {setting.RUN_INTERVAL_MINUTES} minutes...")
-        time.sleep(minutes_to_sleep)
+        time.sleep(60 * setting.RUN_INTERVAL_MINUTES)  # sleep in seconds

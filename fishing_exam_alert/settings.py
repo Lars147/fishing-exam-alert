@@ -16,6 +16,10 @@ class Settings:
     NOTIFY_MAIL_REPLY_TO: str = os.getenv("NOTIFY_MAIL_REPLY_TO", "")  # optional: reply_to mail address
     NOTIFY_MAIL_PASSWORD: str = os.environ["NOTIFY_MAIL_PASSWORD"]
 
+    # for admin
+    DISTANCE_THRESHOLD: int = int(os.getenv("DISTANCE_THRESHOLD", "500"))
+    GCHAT_WEBHOOK_URL: str = os.environ["GCHAT_WEBHOOK_URL"]
+
     # for testing
     TEST_EMAIL: str = os.environ.get("TEST_EMAIL", "")
 

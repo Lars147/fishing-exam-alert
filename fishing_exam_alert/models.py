@@ -335,6 +335,11 @@ class Distance(sqlmodel.SQLModel, table=True):
         db.add(self)
         db.commit()
 
+        if self.distance > setting.DISTANCE_THRESHOLD:
+            message = f"Distance between {self.start_address} and {self.end_address} is {self.distance} meters, which exceeds the threshold of {setting.DISTANCE_THRESHOLD} meters."
+            logger.warning(message)
+            utils.notify_admin_via_gchat(message)
+
         return self.distance  # type: ignore # value is set by _set_values_from_gmap_api
 
     def get_duration(self, db: sqlmodel.Session) -> int:

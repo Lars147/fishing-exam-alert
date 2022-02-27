@@ -1,7 +1,9 @@
 import enum
+import json
 import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
+from venv import create
 
 import gspread
 import pandas as pd
@@ -38,8 +40,11 @@ class District(str, enum.Enum):
 class User(sqlmodel.SQLModel, table=True):
     id: Optional[int] = sqlmodel.Field(default=None, primary_key=True)
     email: str = sqlmodel.Field(sa_column=sqlmodel.Column("email", sqlmodel.String, unique=True))
-    districts: Optional[str] = ""
+    max_travel_duration: Optional[int] = sqlmodel.Field(default=None)  # in minutes
     postal_code: Optional[str] = ""
+    districts: Optional[str] = ""  # a stringified repr. of List[District]
+    need_headphones: bool = False
+    need_disabled_access: bool = False
     active: bool = True
     created_at: Optional[datetime] = sqlmodel.Field(
         sa_column=sqlmodel.Column(
@@ -80,6 +85,7 @@ class User(sqlmodel.SQLModel, table=True):
     def get_or_create(cls, db: sqlmodel.Session, email: str, defaults: Dict[str, Any] = {}) -> Tuple["User", bool]:
         user = cls.get_by_mail(db, email=email)
         created = False
+
         if not user:
             user = cls(email=email)
             if defaults:
@@ -87,7 +93,9 @@ class User(sqlmodel.SQLModel, table=True):
                     setattr(user, k, v)
             db.add(user)
             db.commit()
+
             created = True
+
         return user, created
 
     @classmethod
@@ -116,6 +124,11 @@ class User(sqlmodel.SQLModel, table=True):
         mail = EmailLog(category=category, content=content, user_id=self.id)
         db.add(mail)
         db.commit()
+
+    def get_address_line(self) -> str:
+        if not self.postal_code:
+            return ""
+        return f"{self.postal_code}, Deutschland"
 
 
 class EmailLogCategory(str, enum.Enum):
@@ -191,8 +204,10 @@ class Exam(sqlmodel.SQLModel, table=True):
         return results.first()
 
     @classmethod
-    def get_or_create(cls, db: sqlmodel.Session, exam_id: str, defaults: dict = {}) -> "Exam":
+    def get_or_create(cls, db: sqlmodel.Session, exam_id: str, defaults: dict = {}) -> Tuple["Exam", bool]:
         exam = cls.get_exam_by_exam_id(db, exam_id=exam_id)
+        created = False
+
         if not exam:
             exam = cls(exam_id=exam_id)
             if defaults:
@@ -200,18 +215,25 @@ class Exam(sqlmodel.SQLModel, table=True):
                     setattr(exam, k, v)
             db.add(exam)
             db.commit()
-        return exam
+
+            created = True
+
+        return exam, created
 
     @classmethod
     def get_multi_as_dataframe(
         cls,
         db: sqlmodel.Session,
         status: Optional[str] = None,
+        disabled_access: Optional[bool] = None,
+        headphones: Optional[bool] = None,
         exam_start__min: Optional[datetime] = None,
         districts__in: Optional[List[District]] = None,
     ) -> DataFrame:
         statement = cls.get_multi_statement(
             status=status,
+            disabled_access=disabled_access,
+            headphones=headphones,
             exam_start__min=exam_start__min,
             districts__in=districts__in,
         )
@@ -222,11 +244,15 @@ class Exam(sqlmodel.SQLModel, table=True):
         cls,
         db: sqlmodel.Session,
         status: Optional[str] = None,
+        disabled_access: Optional[bool] = None,
+        headphones: Optional[bool] = None,
         exam_start__min: Optional[datetime] = None,
         districts__in: Optional[List[District]] = None,
-    ) -> List[Optional["Exam"]]:
+    ) -> List["Exam"]:
         statement = cls.get_multi_statement(
             status=status,
+            disabled_access=disabled_access,
+            headphones=headphones,
             exam_start__min=exam_start__min,
             districts__in=districts__in,
         )
@@ -238,6 +264,8 @@ class Exam(sqlmodel.SQLModel, table=True):
     def get_multi_statement(
         cls,
         status: Optional[str] = None,
+        disabled_access: Optional[bool] = None,
+        headphones: Optional[bool] = None,
         exam_start__min: Optional[datetime] = None,
         districts__in: Optional[List[District]] = None,
     ):
@@ -245,6 +273,12 @@ class Exam(sqlmodel.SQLModel, table=True):
 
         if status:
             statement = statement.where(cls.status == status)
+
+        if disabled_access:
+            statement = statement.where(cls.disabled_access == disabled_access)
+
+        if headphones:
+            statement = statement.where(cls.headphones == headphones)
 
         if exam_start__min:
             statement = statement.where(cls.exam_start >= exam_start__min)
@@ -254,13 +288,83 @@ class Exam(sqlmodel.SQLModel, table=True):
 
         return statement
 
+    def get_address_line(self) -> str:
+        return f"{self.street} {self.street_number}, {self.postal_code} {self.city}, Deutschland"
 
-class ExamUserDistance(sqlmodel.SQLModel, table=True):
+
+class Distance(sqlmodel.SQLModel, table=True):
     id: Optional[int] = sqlmodel.Field(default=None, primary_key=True)
-    distance: float
-    duration: int
-    user_id: Optional[int] = sqlmodel.Field(default=None, foreign_key="user.id")
-    exam_id: Optional[int] = sqlmodel.Field(default=None, foreign_key="exam.id")
+    distance: Optional[int] = sqlmodel.Field(default=None)  # in meters
+    duration: Optional[int] = sqlmodel.Field(default=None)  # in seconds
+    details: Optional[str] = sqlmodel.Field(default=None)  # full api response
+    start_address: str
+    end_address: str
+
+    @classmethod
+    def get_by_start_and_end_address(
+        cls, db: sqlmodel.Session, start_address: str, end_address: str
+    ) -> Optional["Distance"]:
+        statement = sqlmodel.select(cls).where(cls.start_address == start_address, cls.end_address == end_address)
+        results = db.exec(statement)
+        return results.first()
+
+    @classmethod
+    def get_or_create(cls, db: sqlmodel.Session, start_address: str, end_address: str) -> Tuple["Distance", bool]:
+        distance = cls.get_by_start_and_end_address(db=db, start_address=start_address, end_address=end_address)
+        created = False
+
+        if not distance:
+            distance = cls(start_address=start_address, end_address=end_address)
+            db.add(distance)
+            db.commit()
+
+            created = True
+
+        return distance, created
+
+    def get_distance(self, db: sqlmodel.Session) -> int:
+        """Get the distance in meters.
+
+        Must be called within the context of a database session.
+        """
+        if self.distance:
+            return self.distance
+
+        self._set_values_from_gmap_api()  # will set distance
+
+        db.add(self)
+        db.commit()
+
+        return self.distance  # type: ignore # value is set by _set_values_from_gmap_api
+
+    def get_duration(self, db: sqlmodel.Session) -> int:
+        """Get the duration in seconds
+
+        Must be called within the context of a database session.
+        """
+        if self.duration:
+            return self.duration
+
+        self._set_values_from_gmap_api()
+
+        db.add(self)
+        db.commit()
+
+        return self.duration  # type: ignore # value is set by _set_values_from_gmap_api
+
+    def _set_values_from_gmap_api(self) -> None:
+        """Set the values 'distance', 'duration' and 'details' from Google Maps API."""
+        gmap_res = utils.get_distance_from_gmaps(self.start_address, self.end_address)
+        self.details = json.dumps(gmap_res)
+
+        # get the gmap legs (more info: )
+        legs = gmap_res[0]["legs"]
+
+        # sort by shortest distance
+        legs.sort(key=lambda x: x["distance"]["value"])
+
+        self.duration = legs[0]["duration"]["value"]
+        self.distance = legs[0]["distance"]["value"]
 
 
 class ExamTableScraper:
@@ -310,7 +414,7 @@ class ExamTableScraper:
 
     def sync_exams_to_db(self, db: sqlmodel.Session) -> None:
         for exam in self.exams:
-            exam_in = Exam.get_or_create(db, exam_id=exam.exam_id, defaults=exam.dict(exclude_unset=True))
+            exam_in, _ = Exam.get_or_create(db, exam_id=exam.exam_id, defaults=exam.dict(exclude_unset=True))
             db.add(exam_in)
         db.commit()
 
@@ -335,7 +439,7 @@ class ExamTableScraper:
             # create exam datetime and localize it
             exam_start_str = f'{raw_table_data["Prüfungstermin"]} {raw_table_data["Prüfungsbeginn"]}'
             exam_start_dt = datetime.strptime(exam_start_str, "%d.%m.%Y %H:%M")
-            exam_start = utils.localize_datetime(exam_start_dt)
+            exam_start = utils.localize_dt_to_utc(exam_start_dt)
 
             rows.append(
                 Exam(
@@ -347,13 +451,13 @@ class ExamTableScraper:
                     postal_code=raw_table_data["PLZ"],
                     district=district,
                     exam_start=exam_start,
-                    min_participants=raw_table_data["Min. Teilnehmer"],
-                    max_participants=raw_table_data["Max. Teilnehmer"],
-                    current_participants=raw_table_data["Aktuelle Teilnehmer"],
+                    min_participants=int(raw_table_data["Min. Teilnehmer"]),
+                    max_participants=int(raw_table_data["Max. Teilnehmer"]),
+                    current_participants=int(raw_table_data["Aktuelle Teilnehmer"]),
                     status=raw_table_data["Status"],
                     disabled_access=bool(raw_table_data["Behindertengerecht"]),
                     headphones=bool(raw_table_data["Kopfhörer"]),
-                )
+                )  # type: ignore
             )
         return rows
 
@@ -371,7 +475,7 @@ class ExamTableScraper:
     def _extract_overview_table(self, table_soup: BeautifulSoup) -> List[Dict[str, str]]:
         exam_table_selector = "#pruefungsterminSearch\:pruefungsterminList > tbody > tr"
         table_rows = table_soup.select(exam_table_selector)
-        print(f"Found {len(table_rows)} exams...")
+        logger.info(f"Found {len(table_rows)} exams...")
 
         rows = list()
         for row in table_rows:
@@ -416,7 +520,6 @@ class GSheetTable:
         self.df = self.get_records_as_dataframe()
 
     def get_sheet(self) -> Spreadsheet:
-        # TODO: test this
         sh = self.gc.open_by_key(self.gsheet_key)
         return sh
 
@@ -461,12 +564,11 @@ class GSheetTable:
         return not_notified_indices_list[0]
 
     def mark_row_as_notified(self, row_index: int) -> None:
-        print(f"Mark row {row_index} as notified...")
         self.df.loc[row_index, self.notification_column_name] = "TRUE"
         row_to_mark = self.df.iloc[row_index]
 
-        print(
-            f"Marking row {row_index} (E-Mail: {row_to_mark['E-Mail-Adresse']}; Zeitstempel: {row_to_mark['Zeitstempel']}) as notified..."
+        logger.info(
+            f"Mark {row_index =} ({row_to_mark['E-Mail-Adresse'] =}; {row_to_mark['Zeitstempel'] =}) as notified..."
         )
         self.worksheet.clear()
         self.update()
@@ -516,9 +618,22 @@ class GSheetTable:
         # add filters
         notify_row["filters"] = dict()
         notify_row["filters"]["Teilnehmer"] = "Frei"
-        locations = row["Nur bestimmte Regierungsbezirke? (Standard: Alle)"]
+
+        locations = row["Welche Bezirke kommen für dich in Frage?"]
         if locations:
             notify_row["filters"]["Regierungsbezirk"] = locations.split(", ")
+
+        postal_code = row["Deine PLZ"]
+        if postal_code:
+            notify_row["filters"]["PLZ"] = postal_code
+
+        max_travel_duration = row["Maximale Fahrzeit zur Prüfung (in Minuten)?"]
+        if max_travel_duration:
+            notify_row["filters"]["Fahrzeit zur Prüfung (in Minuten)"] = max_travel_duration
+
+        equipment = row["Welche Ausstattung soll der Prüfungsort erfüllen?"]
+        if equipment:
+            notify_row["filters"]["Ausstattung"] = equipment
 
         return notify_row
 

@@ -1,7 +1,8 @@
 import time
+
 from loguru import logger
 
-from fishing_exam_alert import models, notifier
+from fishing_exam_alert import db, models, notifier
 from fishing_exam_alert.settings import setting
 
 
@@ -35,6 +36,7 @@ def main():
 
 
 if __name__ == "__main__":
+    db.SQLModel.metadata.create_all(db.engine)  # init db
     while True:
         main()
         logger.info(f"Sleep for {setting.CONFIRMATION_INTERVAL_SECONDS} seconds...")

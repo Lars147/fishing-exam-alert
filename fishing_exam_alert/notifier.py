@@ -2,6 +2,7 @@ import smtplib
 from email.message import EmailMessage
 
 import pandas as pd
+from loguru import logger
 from mailersend import emails
 from sqlmodel import Session
 
@@ -16,12 +17,12 @@ def notify(email_to: str, exams: pd.DataFrame):
     email_to_username = email_to.split("@")[0]  # removes for example @gmail.de
     pre_message_plain = f"""
     Hi {email_to_username},\n
-    es gibt {len(exams)} Prüfungen, die deinen Filterkriterien entsprechen:\n\n
+    es gibt {len(exams)} Prüfung(en), die deinen Filterkriterien entsprechen:\n\n
     """
     post_message_plain = f"""\n
-    Du kannst dich hier für die Fischereiprüfung anmelden: {setting.EXAM_SCRAP_URL}.
+    Du kannst dich hier für die Fischerprüfungen anmelden: {setting.EXAM_SCRAP_URL}.
     \n\n
-    Du bekommst diese Mail, weil du dich für den Fischereiprüfungs Alarm angemeldet hast.\n
+    Du bekommst diese Mail, weil du dich für die "Fischerprüfung Updates" angemeldet hast.\n
     Wenn du keine Benachrichtigungen mehr erhalten möchtest 
     oder du fälschlicherweise diese Mail erhalten hast, 
     kannst du dich hier abmelden: {setting.UNSUBSCRIBE_URL}.
@@ -30,22 +31,20 @@ def notify(email_to: str, exams: pd.DataFrame):
 
     pre_message_html = f"""
     Hi {email_to_username},<br/>
-    es gibt {len(exams)} Prüfungen, die deinen Filterkriterien entsprechen:<br/><br/>
+    es gibt {len(exams)} Prüfung(en), die deinen Filterkriterien entsprechen:<br/><br/>
     """
     post_message_html = f"""<br/>
-    Du kannst dich hier für die Fischereiprüfung anmelden: <a href="{setting.EXAM_SCRAP_URL}">{setting.EXAM_SCRAP_URL}</a>.
+    Du kannst dich hier für die Fischerprüfungen anmelden: <a href="{setting.EXAM_SCRAP_URL}">{setting.EXAM_SCRAP_URL}</a>.
     <br/><br/>
-    Du bekommst diese Mail, weil du dich für den Fischereiprüfungs Alarm angemeldet hast.
+    Du bekommst diese Mail, weil du dich für die "Fischerprüfung Updates" angemeldet hast.
     <br/>
     Wenn du keine Benachrichtigungen mehr erhalten möchtest 
     oder du fälschlicherweise diese Mail erhalten hast, 
     kannst du dich <a href="{setting.UNSUBSCRIBE_URL}">hier</a> abmelden.
     """
-    html_message = pre_message_html + exams.to_html() + post_message_html
+    html_message = pre_message_html + exams.to_html(render_links=True, col_space=100) + post_message_html
 
-    send_mail(
-        email_to, f"Fischereiprüfungen - Update - Es gibt {len(exams)} freie Termine!", plain_message, html_message
-    )
+    send_mail(email_to, f"Fischerprüfung Updates - Es gibt {len(exams)} freie Termine!", plain_message, html_message)
 
 
 def send_unsubscribe_mail(email_to: str):
@@ -64,7 +63,7 @@ def send_unsubscribe_mail(email_to: str):
     Wenn du fälschlicherweise abgemeldet wurdest oder dich wieder anmelden möchtest, 
     kannst du dich <a href="{setting.SUBSCRIBE_URL}">hier</a> wieder anmelden.
     """
-    send_mail(email_to, "Abmeldung - Fischereiprüfungs Alarm!", message, html_message)
+    send_mail(email_to, "Fischerprüfung Updates - Abmeldung!", message, html_message)
 
 
 def send_confirmation_mail(email_to: str, filters: dict):
@@ -84,7 +83,7 @@ def send_confirmation_mail(email_to: str, filters: dict):
     email_to_username = email_to.split("@")[0]  # removes for example @gmail.de
     message = f"""
     Hi {email_to_username},\n
-    du erhälst diese Mail, weil du dich für den Fischereiprüfungs Alarm angemeldet hast.\n
+    du erhälst diese Mail, weil du dich für die "Fischerprüfung Updates" angemeldet hast.\n
     Ab sofort wirst du über alle Termine informiert, wenn die folgenden Filter zutreffen:\n
     
     {filters_text_plain}
@@ -98,7 +97,7 @@ def send_confirmation_mail(email_to: str, filters: dict):
     filters_text_html = "\n".join([f"<li>{key}: {value}</li>" for key, value in filters.items()])
     html_message = f"""
     Hi {email_to_username},<br/>
-    du erhälst diese Mail, weil du dich für den Fischereiprüfungs Alarm angemeldet hast.<br/>
+    du erhälst diese Mail, weil du dich für die "Fischerprüfung Updates" angemeldet hast.<br/>
     Ab sofort wirst du über alle Termine informiert, wenn die folgenden Filter zutreffen:<br/>
     
     <ul>
@@ -110,7 +109,7 @@ def send_confirmation_mail(email_to: str, filters: dict):
     oder du fälschlicherweise diese Mail erhalten hast, 
     kannst du dich <a href="{setting.UNSUBSCRIBE_URL}">hier</a> abmelden.
     """
-    send_mail(email_to, "Anmeldung - Fischereiprüfungs Alarm!", message, html_message)
+    send_mail(email_to, "Fischerprüfung Updates - Anmeldung!", message, html_message)
 
 
 def send_mail(email_to: str, subject: str, message: str, html_message: str = "", send_duplicate: bool = False):
@@ -121,7 +120,7 @@ def send_mail(email_to: str, subject: str, message: str, html_message: str = "",
             latest_mail = models.EmailLog.get_latest_mail_by_user_mail(db=session, email=email_to)
 
         if latest_mail and latest_mail.content == message:
-            print(f"Skip sending mail to {email_to} because it was already sent.")
+            logger.info(f"Skip sending mail to '{email_to}' with {subject =} because it was already sent.")
             return  # don't send duplicate mail content
 
     if setting.MAIL_SERVICE == "mailersend":
@@ -130,9 +129,9 @@ def send_mail(email_to: str, subject: str, message: str, html_message: str = "",
         send_mail_with_gmx(email_to, subject, message, html_message)
 
     with Session(db.engine) as session:
-        user = models.User.get_by_mail(session, email=email_to)
-        if not user:
-            raise Exception(f"User with mail {email_to} not found")
+        user, created = models.User.get_or_create(session, email=email_to)
+        if created:
+            logger.info(f"User with mail {email_to} was not found in the database. Created new user.")
         user.create_email_log(session, category=models.EmailLogCategory.notification, content=message)
         session.commit()
 

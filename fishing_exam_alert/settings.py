@@ -7,6 +7,7 @@ class Settings:
     EXAM_SCRAP_URL: str = (
         os.environ.get("EXAM_SCRAP_URL") or "https://fischerpruefung-online.bayern.de/fprApp/verwaltung/Pruefungssuche"
     )
+    GMAP_API_KEY: str = os.environ["GMAP_API_KEY"]
     GSHEET_SPREADSHEET_ID: str = os.environ["GSHEET_SPREADSHEET_ID"]
     SUBSCRIBE_URL: str = os.environ["SUBSCRIBE_URL"]
     UNSUBSCRIBE_URL: str = os.environ["UNSUBSCRIBE_URL"]
@@ -14,6 +15,9 @@ class Settings:
     NOTIFY_MAIL_FROM: str = os.environ["NOTIFY_MAIL_FROM"]
     NOTIFY_MAIL_REPLY_TO: str = os.getenv("NOTIFY_MAIL_REPLY_TO", "")  # optional: reply_to mail address
     NOTIFY_MAIL_PASSWORD: str = os.environ["NOTIFY_MAIL_PASSWORD"]
+
+    # for testing
+    TEST_EMAIL: str = os.environ.get("TEST_EMAIL", "")
 
     def __init__(self):
         self.validate()

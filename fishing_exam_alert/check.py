@@ -1,6 +1,8 @@
+from loguru import logger
+
 from fishing_exam_alert.models import GSheetTable
+from fishing_exam_alert.notifier import send_confirmation_mail, send_mail
 from fishing_exam_alert.settings import setting
-from fishing_exam_alert.utils import send_confirmation_mail, send_mail
 
 
 def get_length_of_gsheet() -> int:
@@ -16,15 +18,15 @@ def send_test_mail(subject: str = "") -> None:
 
 
 if __name__ == "__main__":
-    print("Check access to GSheet...", end="")
+    logger.info("Check access to GSheet...", end="")
     gsheet_len = get_length_of_gsheet()
-    print("Done!")
+    logger.info("Done!")
 
-    print("Send mail via GMX...", end="")
+    logger.info("Send mail via GMX...", end="")
     send_test_mail(subject=f"This is a test! GSheet has {gsheet_len} rows!")
-    print("Done!")
+    logger.info("Done!")
 
-    print("Send test confirmation mail via GMX...", end="")
+    logger.info("Send test confirmation mail via GMX...", end="")
     test_filters = {"Teilnehmer": "Frei", "Regierungsbezirk": ["Oberbayern"]}
     send_confirmation_mail(setting.NOTIFY_MAIL_FROM, test_filters)
-    print("Done!")
+    logger.info("Done!")

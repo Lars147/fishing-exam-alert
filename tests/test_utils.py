@@ -2,8 +2,8 @@ import unittest
 from urllib.parse import quote_plus
 
 import pandas as pd
-
 from sqlmodel import Session
+
 from fishing_exam_alert import db, utils
 from tests.utils import create_random_exam
 
@@ -39,5 +39,6 @@ class TestUtils(unittest.TestCase):
             first_row["Belegte Plätze"] == f"{test_exam.current_participants} / {test_exam.max_participants}"
         )
         self.assertTrue(
-            first_row["Route"] == f"https://www.google.com/maps/dir/{quote_plus('80469, Deutschland')}/{quote_plus(test_exam.get_address_line())}"
+            first_row["Route"]
+            == f"https://www.google.com/maps/dir/{quote_plus('80469, Deutschland')}/{quote_plus(test_exam.get_address_line())}"
         )

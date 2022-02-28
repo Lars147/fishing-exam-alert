@@ -101,10 +101,11 @@ class User(sqlmodel.SQLModel, table=True):
     @classmethod
     def update_or_create(cls, db: sqlmodel.Session, email: str, defaults: Dict[str, Any] = {}) -> Tuple["User", bool]:
         user, created = cls.get_or_create(db, email=email, defaults=defaults)
-        for k, v in defaults.items():
-            setattr(user, k, v)
-        db.add(user)
-        db.commit()
+        if not created:
+            for k, v in defaults.items():
+                setattr(user, k, v)
+            db.add(user)
+            db.commit()
         return user, created
 
     @classmethod
@@ -222,10 +223,11 @@ class Exam(sqlmodel.SQLModel, table=True):
     @classmethod
     def update_or_create(cls, db: sqlmodel.Session, exam_id: str, defaults: Dict[str, Any] = {}) -> Tuple["Exam", bool]:
         exam, created = cls.get_or_create(db, exam_id=exam_id, defaults=defaults)
-        for k, v in defaults.items():
-            setattr(exam, k, v)
-        db.add(exam)
-        db.commit()
+        if not created:
+            for k, v in defaults.items():
+                setattr(exam, k, v)
+            db.add(exam)
+            db.commit()
         return exam, created
 
     @classmethod

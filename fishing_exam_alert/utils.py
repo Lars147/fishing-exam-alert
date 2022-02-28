@@ -74,7 +74,8 @@ def transform_db_dataframe_for_mail(df: pd.DataFrame) -> pd.DataFrame:
     transformed_df.rename(columns=german_mapping, inplace=True)
 
     # reorder the columns
-    transformed_df = transformed_df[german_mapping.values()]
+    cols_to_reorder = list(set(german_mapping.values()) & set(transformed_df))
+    transformed_df = transformed_df[cols_to_reorder]
 
     return transformed_df
 

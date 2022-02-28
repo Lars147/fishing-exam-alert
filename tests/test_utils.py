@@ -17,6 +17,31 @@ class TestUtils(unittest.TestCase):
             data=[
                 {
                     **test_exam.dict(),
+                    "address_line": test_exam.get_address_line(),
+                }
+            ]
+        )
+
+        transformed_df = utils.transform_db_dataframe_for_mail(df)
+
+        self.assertTrue(len(transformed_df) == 1)
+
+        first_row = transformed_df.iloc[0]
+        self.assertTrue(first_row["Adresse"] == test_exam.get_address_line())
+        localized_exam_start = utils.dt_to_local(test_exam.exam_start)
+        self.assertTrue(first_row["Prüfungsbeginn"] == localized_exam_start.strftime("%d.%m.%Y %H:%M"))
+        self.assertTrue(
+            first_row["Belegte Plätze"] == f"{test_exam.current_participants} / {test_exam.max_participants}"
+        )
+
+    def test_transform_db_dataframe_for_mail_with_destination(self):
+        with Session(db.engine) as session:
+            test_exam = create_random_exam(session)
+
+        df = pd.DataFrame.from_records(
+            data=[
+                {
+                    **test_exam.dict(),
                     "start_address_line": "80469, Deutschland",
                     "address_line": test_exam.get_address_line(),
                     "travel_duration": 90,

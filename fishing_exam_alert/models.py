@@ -101,11 +101,10 @@ class User(sqlmodel.SQLModel, table=True):
     @classmethod
     def update_or_create(cls, db: sqlmodel.Session, email: str, defaults: Dict[str, Any] = {}) -> Tuple["User", bool]:
         user, created = cls.get_or_create(db, email=email, defaults=defaults)
-        if not created:
-            for k, v in defaults.items():
-                setattr(user, k, v)
-            db.add(user)
-            db.commit()
+        for k, v in defaults.items():
+            setattr(user, k, v)
+        db.add(user)
+        db.commit()
         return user, created
 
     @classmethod
@@ -218,6 +217,15 @@ class Exam(sqlmodel.SQLModel, table=True):
 
             created = True
 
+        return exam, created
+
+    @classmethod
+    def update_or_create(cls, db: sqlmodel.Session, exam_id: str, defaults: Dict[str, Any] = {}) -> Tuple["Exam", bool]:
+        exam, created = cls.get_or_create(db, exam_id=exam_id, defaults=defaults)
+        for k, v in defaults.items():
+            setattr(exam, k, v)
+        db.add(exam)
+        db.commit()
         return exam, created
 
     @classmethod
@@ -419,9 +427,7 @@ class ExamTableScraper:
 
     def sync_exams_to_db(self, db: sqlmodel.Session) -> None:
         for exam in self.exams:
-            exam_in, _ = Exam.get_or_create(db, exam_id=exam.exam_id, defaults=exam.dict(exclude_unset=True))
-            db.add(exam_in)
-        db.commit()
+            exam_in, _ = Exam.update_or_create(db, exam_id=exam.exam_id, defaults=exam.dict(exclude_unset=True))
 
     def _parse_exam_tables(self) -> List[Exam]:
         logger.info("Parse exam overview table...")

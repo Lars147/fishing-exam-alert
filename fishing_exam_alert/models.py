@@ -429,7 +429,9 @@ class ExamTableScraper:
 
     def sync_exams_to_db(self, db: sqlmodel.Session) -> None:
         for exam in self.exams:
-            exam_in, _ = Exam.update_or_create(db, exam_id=exam.exam_id, defaults=exam.dict(exclude_unset=True))
+            exam_in, _ = Exam.update_or_create(
+                db, exam_id=exam.exam_id, defaults=exam.dict(exclude_unset=True, exclude_defaults=True)
+            )
 
     def _parse_exam_tables(self) -> List[Exam]:
         logger.info("Parse exam overview table...")

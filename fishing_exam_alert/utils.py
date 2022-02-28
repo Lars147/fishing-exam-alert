@@ -57,10 +57,11 @@ def transform_db_dataframe_for_mail(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     # create directions link
-    transformed_df["directions_url"] = transformed_df.apply(
-        lambda row: f"https://www.google.com/maps/dir/{quote_plus(row.start_address_line)}/{quote_plus(row.address_line)}",
-        axis=1,
-    )
+    if "start_address_line" in transformed_df and "address_line" in transformed_df:
+        transformed_df["directions_url"] = transformed_df.apply(
+            lambda row: f"https://www.google.com/maps/dir/{quote_plus(row.start_address_line)}/{quote_plus(row.address_line)}",
+            axis=1,
+        )
 
     # transform datetime
     transformed_df["exam_start_german_time"] = transformed_df["exam_start"].dt.strftime("%d.%m.%Y %H:%M")

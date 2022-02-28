@@ -88,7 +88,7 @@ def run():
 
     for user in active_users:
 
-        logger.debug("Get exams for user...")
+        logger.debug(f"Get exams for user {user.email}...")
         with Session(db.engine) as session:
             active_exams = get_active_exams(session, user)
 

@@ -474,6 +474,10 @@ class ExamTableScraper:
                     headphones=bool(raw_table_data["Kopfhörer"]),
                 )  # type: ignore
             )
+
+        if len(tables) != len(rows):
+            raise Exception(f"Number of tables ({len(tables)}) does not match number of rows ({len(rows)})!")
+
         return rows
 
     def _match_overview_table_row(self, overview_table: List[Dict[str, str]], detail_table: Dict[str, str]) -> District:

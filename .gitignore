@@ -4,3 +4,4 @@ docs/_build
 fishing_exam_alert/google_creds/*
 .env
 database.sqlite
+*.DS_Store

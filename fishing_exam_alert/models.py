@@ -413,10 +413,14 @@ class ExamTableScraper:
             logger.debug("Found cookie in response!")
 
             # get the printed view of the exam table (contains more info on exams)
+            submit_btn_tag = soup.find("input", {"type": "submit", "value": "Druckansicht"})
+            if not submit_btn_tag:
+                raise Exception("Submit button not found!")
+            submit_btn_tag_name = submit_btn_tag.attrs["name"]  # e.g. pruefungsterminSearch:j_idt195
             data = {
                 "pruefungsterminSearch": "pruefungsterminSearch",
                 "_csrf": csrf_token,
-                "pruefungsterminSearch:j_idt195": "Druckansicht",
+                submit_btn_tag_name: "Druckansicht",
                 "javax.faces.ViewState": "e1s1",
             }
             printed_res = s.post(f"{self.exam_url}?execution=e1s1", data=data)

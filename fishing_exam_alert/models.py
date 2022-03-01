@@ -416,7 +416,7 @@ class ExamTableScraper:
             data = {
                 "pruefungsterminSearch": "pruefungsterminSearch",
                 "_csrf": csrf_token,
-                "pruefungsterminSearch:j_idt190": "Druckansicht",
+                "pruefungsterminSearch:j_idt195": "Druckansicht",
                 "javax.faces.ViewState": "e1s1",
             }
             printed_res = s.post(f"{self.exam_url}?execution=e1s1", data=data)

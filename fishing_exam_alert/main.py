@@ -2,7 +2,6 @@ import time
 from datetime import datetime
 
 import pandas as pd
-import sqlmodel
 from loguru import logger
 from sqlmodel import Session
 
@@ -35,7 +34,7 @@ def sync_exams() -> None:
         exam_scraper.sync_exams_to_db(session)
 
 
-def get_active_exams(db: sqlmodel.Session, user: models.User) -> pd.DataFrame:
+def get_active_exams(db: Session, user: models.User) -> pd.DataFrame:
     # filter the exams for the user settings
     filtered_exams = models.Exam.get_multi(
         db=db,

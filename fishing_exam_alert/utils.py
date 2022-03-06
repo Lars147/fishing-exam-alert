@@ -24,10 +24,6 @@ def localize_dt_to_utc(dt: datetime) -> datetime:
     return dt_to_utc(dt_localized)
 
 
-def dt_to_local(dt: datetime) -> datetime:
-    return dt.astimezone(timezone("Europe/Berlin"))
-
-
 def transform_db_dataframe_for_mail(df: pd.DataFrame) -> pd.DataFrame:
     transformed_df = df.copy()
     german_mapping = {

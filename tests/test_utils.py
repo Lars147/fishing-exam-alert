@@ -20,14 +20,17 @@ class TestDateTimeUtils(unittest.TestCase):
 
 class TestUtils(unittest.TestCase):
     def test_transform_db_dataframe_for_mail(self):
+        exam_start = utils.localize_datetime(datetime.now())
+
         with Session(db.engine) as session:
-            test_exam = create_random_exam(session)
+            test_exam = create_random_exam(session, exam_start=exam_start)
+            test_exam_address_line = test_exam.get_address_line()
 
         df = pd.DataFrame.from_records(
             data=[
                 {
                     **test_exam.dict(),
-                    "address_line": test_exam.get_address_line(),
+                    "address_line": test_exam_address_line,
                 }
             ]
         )
@@ -37,7 +40,7 @@ class TestUtils(unittest.TestCase):
         self.assertTrue(len(transformed_df) == 1)
 
         first_row = transformed_df.iloc[0]
-        self.assertTrue(first_row["Adresse"] == test_exam.get_address_line())
+        self.assertTrue(first_row["Adresse"] == test_exam_address_line)
         localized_exam_start = utils.localize_datetime(test_exam.exam_start)
         self.assertTrue(first_row["Prüfungsbeginn"] == localized_exam_start.strftime("%d.%m.%Y %H:%M"))
         self.assertTrue(

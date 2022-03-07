@@ -45,16 +45,11 @@ def get_active_exams(db: Session, user: models.User) -> pd.DataFrame:
         headphones=user.need_headphones or None,
     )
 
-    filtered_exams_localized = list()
-    for f in filtered_exams:
-        f.exam_start = utils.localize_datetime(f.exam_start)
-        filtered_exams_localized.append(f)
-
     # check if the user wants the exams filtered by travel duration
     exams_for_user = list()
     if user.max_travel_duration and user.get_address_line():
 
-        for exam in filtered_exams_localized:
+        for exam in filtered_exams:
             distance_in, _ = models.Distance.get_or_create(
                 db, start_address=user.get_address_line(), end_address=exam.get_address_line()
             )

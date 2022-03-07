@@ -457,7 +457,8 @@ class ExamTableScraper:
             # create exam datetime and localize it
             exam_start_str = f'{raw_table_data["Prüfungstermin"]} {raw_table_data["Prüfungsbeginn"]}'
             exam_start_dt = datetime.strptime(exam_start_str, "%d.%m.%Y %H:%M")
-            exam_start = utils.localize_dt_to_utc(exam_start_dt)
+            # exam_start = utils.localize_dt_to_utc(exam_start_dt)
+            exam_start = exam_start_dt
 
             rows.append(
                 Exam(

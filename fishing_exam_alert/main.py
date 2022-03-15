@@ -27,6 +27,9 @@ def sync_users_from_gsheet() -> None:
             }
             models.User.update_or_create(session, email=row["E-Mail-Adresse"], defaults=defaults)
 
+    # login to google again
+    gsheet.gc.login()
+
 
 def sync_exams() -> None:
     exam_scraper = models.ExamTableScraper()
